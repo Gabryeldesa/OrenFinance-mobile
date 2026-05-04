@@ -1,9 +1,18 @@
 import React, { useEffect, useState } from 'react'
 import { ActivityIndicator, View } from 'react-native'
 import AsyncStorage from '@react-native-async-storage/async-storage'
+import { NavigationContainer } from '@react-navigation/native'
+import { createNativeStackNavigator } from '@react-navigation/native-stack'
 
 import LoginScreen from '../screens/LoginScreen'
 import DashboardScreen from '../screens/DashboardScreen'
+import TransactionsScreen from '../screens/TransactionsScreen'
+
+const Stack = createNativeStackNavigator()
+
+function DashboardWrapper({ onLogout, navigation }: any) {
+  return <DashboardScreen onLogout={onLogout} navigation={navigation} />
+}
 
 export default function AppNavigator() {
   const [loading, setLoading] = useState(true)
@@ -28,5 +37,14 @@ export default function AppNavigator() {
     return <LoginScreen onLogin={() => setLoggedIn(true)} />
   }
 
-  return <DashboardScreen onLogout={() => setLoggedIn(false)} />
+  return (
+    <NavigationContainer>
+      <Stack.Navigator screenOptions={{ headerShown: false }}>
+        <Stack.Screen name="Dashboard">
+          {(props) => <DashboardWrapper {...props} onLogout={() => setLoggedIn(false)} />}
+        </Stack.Screen>
+        <Stack.Screen name="Transactions" component={TransactionsScreen} />
+      </Stack.Navigator>
+    </NavigationContainer>
+  )
 }
