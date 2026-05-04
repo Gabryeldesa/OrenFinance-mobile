@@ -26,7 +26,7 @@ const getMonth = () => {
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
 }
 
-export default function DashboardScreen({ onLogout, navigation }: any) {
+export default function DashboardScreen({ onLogout }: any) {
   const [summary, setSummary] = useState<Summary | null>(null)
   const [accounts, setAccounts] = useState<Account[]>([])
   const [loading, setLoading] = useState(true)
@@ -113,14 +113,6 @@ export default function DashboardScreen({ onLogout, navigation }: any) {
         </View>
       ))}
 
-      {/* Navegação */}
-      <TouchableOpacity
-        style={styles.button}
-        onPress={() => navigation.navigate('Transactions')}
-      >
-        <Text style={styles.buttonText}>Ver transações</Text>
-      </TouchableOpacity>
-
       <View style={{ height: 32 }} />
     </ScrollView>
   )
@@ -164,9 +156,4 @@ const styles = StyleSheet.create({
   },
   accountName: { fontSize: 15, color: '#374151', fontWeight: '500' },
   accountBalance: { fontSize: 15, fontWeight: '600' },
-  button: {
-    backgroundColor: '#3b82f6', borderRadius: 12, padding: 16,
-    marginHorizontal: 16, marginTop: 20, alignItems: 'center',
-  },
-  buttonText: { color: '#fff', fontSize: 16, fontWeight: '600' },
 })

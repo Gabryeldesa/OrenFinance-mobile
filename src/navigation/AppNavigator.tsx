@@ -1,17 +1,25 @@
 import React, { useEffect, useState } from 'react'
-import { ActivityIndicator, View } from 'react-native'
+import { ActivityIndicator, View, Text } from 'react-native'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { NavigationContainer } from '@react-navigation/native'
-import { createNativeStackNavigator } from '@react-navigation/native-stack'
+import { createBottomTabNavigator } from '@react-navigation/bottom-tabs'
 
 import LoginScreen from '../screens/LoginScreen'
 import DashboardScreen from '../screens/DashboardScreen'
 import TransactionsScreen from '../screens/TransactionsScreen'
 
-const Stack = createNativeStackNavigator()
+const Tab = createBottomTabNavigator()
 
-function DashboardWrapper({ onLogout, navigation }: any) {
-  return <DashboardScreen onLogout={onLogout} navigation={navigation} />
+function TabIcon({ label, focused }: { label: string; focused: boolean }) {
+  const icons: Record<string, string> = {
+    Dashboard: '🏠',
+    Transações: '💳',
+  }
+  return (
+    <Text style={{ fontSize: 20, opacity: focused ? 1 : 0.4 }}>
+      {icons[label] || '📄'}
+    </Text>
+  )
 }
 
 export default function AppNavigator() {
@@ -39,12 +47,32 @@ export default function AppNavigator() {
 
   return (
     <NavigationContainer>
-      <Stack.Navigator screenOptions={{ headerShown: false }}>
-        <Stack.Screen name="Dashboard">
-          {(props) => <DashboardWrapper {...props} onLogout={() => setLoggedIn(false)} />}
-        </Stack.Screen>
-        <Stack.Screen name="Transactions" component={TransactionsScreen} />
-      </Stack.Navigator>
+      <Tab.Navigator
+        screenOptions={({ route }) => ({
+          headerShown: false,
+          tabBarIcon: ({ focused }) => (
+            <TabIcon label={route.name} focused={focused} />
+          ),
+          tabBarActiveTintColor: '#3b82f6',
+          tabBarInactiveTintColor: '#9ca3af',
+          tabBarStyle: {
+            backgroundColor: '#ffffff',
+            borderTopColor: '#e5e7eb',
+            paddingBottom: 8,
+            paddingTop: 8,
+            height: 64,
+          },
+          tabBarLabelStyle: {
+            fontSize: 12,
+            fontWeight: '600',
+          },
+        })}
+      >
+        <Tab.Screen name="Dashboard">
+          {(props) => <DashboardScreen {...props} onLogout={() => setLoggedIn(false)} />}
+        </Tab.Screen>
+        <Tab.Screen name="Transações" component={TransactionsScreen} />
+      </Tab.Navigator>
     </NavigationContainer>
   )
 }
