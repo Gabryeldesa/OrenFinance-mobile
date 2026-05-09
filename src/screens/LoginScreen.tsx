@@ -1,15 +1,20 @@
 import React, { useState } from 'react'
 import {
   View, Text, TextInput, TouchableOpacity,
-  StyleSheet, ActivityIndicator, Alert, KeyboardAvoidingView, Platform
+  StyleSheet, ActivityIndicator, Alert,
+  KeyboardAvoidingView, Platform, useColorScheme
 } from 'react-native'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { supabase } from '../lib/supabase'
+import OrenLogo from '../components/OrenLogo'
 
 export default function LoginScreen({ onLogin }: { onLogin: () => void }) {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
+
+  const scheme = useColorScheme()
+  const dark = scheme === 'dark'
 
   const handleLogin = async () => {
     if (!email || !password) {
@@ -20,10 +25,16 @@ export default function LoginScreen({ onLogin }: { onLogin: () => void }) {
     try {
       const { data, error } = await supabase.auth.signInWithPassword({ email, password })
       if (error) throw error
+
       const token = data.session?.access_token
-      if (token) {
+      const refreshToken = data.session?.refresh_token
+
+      if (token && refreshToken) {
         await AsyncStorage.setItem('token', token)
+        await AsyncStorage.setItem('refresh_token', refreshToken)
         onLogin()
+      } else {
+        Alert.alert('Erro', 'Sessão inválida. Tente novamente.')
       }
     } catch (err: any) {
       Alert.alert('Erro', err.message || 'Não foi possível fazer login.')
@@ -32,110 +43,97 @@ export default function LoginScreen({ onLogin }: { onLogin: () => void }) {
     }
   }
 
+  const themeStyles = {
+    container: { backgroundColor: dark ? '#0f172a' : '#f8fafc' },
+    form: {
+      backgroundColor: dark ? '#1e293b' : '#ffffff',
+      borderColor: dark ? '#334155' : '#e2e8f0'
+    },
+    input: {
+      backgroundColor: dark ? '#0f172a' : '#f1f5f9',
+      borderColor: dark ? '#334155' : '#e2e8f0',
+      color: dark ? '#f1f5f9' : '#1e293b'
+    },
+    text: { color: dark ? '#f1f5f9' : '#1e293b' },
+    subtitle: { color: dark ? '#94a3b8' : '#64748b' }
+  }
+
   return (
     <KeyboardAvoidingView
-      style={styles.container}
+      style={[styles.container, themeStyles.container]}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
-      <View style={styles.card}>
-        <Text style={styles.title}>Oren Finance</Text>
-        <Text style={styles.subtitle}>Faça login para continuar</Text>
+      <View style={styles.inner}>
+        <View style={styles.logoWrap}>
+          <View style={[styles.logoCircle, { backgroundColor: dark ? '#1e3a8a' : '#1e40af' }]}>
+            <OrenLogo size={44} color="#ffffff" />
+          </View>
+          <Text style={[styles.appName, themeStyles.text]}>Oren Finance</Text>
+          <Text style={[styles.subtitle, themeStyles.subtitle]}>Entre na sua conta</Text>
+        </View>
 
-        <Text style={styles.label}>E-mail</Text>
-        <TextInput
-          style={styles.input}
-          placeholder="seu@email.com"
-          placeholderTextColor="#9ca3af"
-          value={email}
-          onChangeText={setEmail}
-          keyboardType="email-address"
-          autoCapitalize="none"
-        />
+        <View style={[styles.form, themeStyles.form]}>
+          <Text style={[styles.label, { color: dark ? '#94a3b8' : '#64748b' }]}>E-mail</Text>
+          <TextInput
+            style={[styles.input, themeStyles.input]}
+            placeholder="seu@email.com"
+            placeholderTextColor={dark ? '#475569' : '#94a3b8'}
+            value={email}
+            onChangeText={setEmail}
+            keyboardType="email-address"
+            autoCapitalize="none"
+          />
 
-        <Text style={styles.label}>Senha</Text>
-        <TextInput
-          style={styles.input}
-          placeholder="••••••••"
-          placeholderTextColor="#9ca3af"
-          value={password}
-          onChangeText={setPassword}
-          secureTextEntry
-        />
+          <Text style={[styles.label, { color: dark ? '#94a3b8' : '#64748b' }]}>Senha</Text>
+          <TextInput
+            style={[styles.input, themeStyles.input]}
+            placeholder="••••••••"
+            placeholderTextColor={dark ? '#475569' : '#94a3b8'}
+            value={password}
+            onChangeText={setPassword}
+            secureTextEntry
+          />
 
-        <TouchableOpacity
-          style={[styles.button, loading && styles.buttonDisabled]}
-          onPress={handleLogin}
-          disabled={loading}
-        >
-          {loading
-            ? <ActivityIndicator color="#fff" />
-            : <Text style={styles.buttonText}>Entrar</Text>
-          }
-        </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.button, loading && styles.buttonDisabled]}
+            onPress={handleLogin}
+            disabled={loading}
+            activeOpacity={0.85}
+          >
+            {loading
+              ? <ActivityIndicator color="#fff" />
+              : <Text style={styles.buttonText}>Entrar</Text>
+            }
+          </TouchableOpacity>
+        </View>
       </View>
     </KeyboardAvoidingView>
   )
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#f3f4f6',
-    justifyContent: 'center',
-    padding: 24,
+  container: { flex: 1 },
+  inner: { flex: 1, justifyContent: 'center', paddingHorizontal: 28 },
+  logoWrap: { alignItems: 'center', marginBottom: 40 },
+  logoCircle: {
+    width: 80, height: 80, borderRadius: 40,
+    justifyContent: 'center', alignItems: 'center', marginBottom: 16,
+    shadowColor: '#3b82f6', shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.4, shadowRadius: 16, elevation: 8,
   },
-  card: {
-    backgroundColor: '#ffffff',
-    borderRadius: 16,
-    padding: 24,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  title: {
-    fontSize: 28,
-    fontWeight: '700',
-    color: '#111827',
-    marginBottom: 4,
-    textAlign: 'center',
-  },
-  subtitle: {
-    fontSize: 14,
-    color: '#6b7280',
-    marginBottom: 24,
-    textAlign: 'center',
-  },
-  label: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#374151',
-    marginBottom: 6,
-  },
+  appName: { fontSize: 26, fontWeight: '700', letterSpacing: 0.5, marginBottom: 6 },
+  subtitle: { fontSize: 14 },
+  form: { borderRadius: 20, padding: 24, borderWidth: 1 },
+  label: { fontSize: 13, fontWeight: '600', marginBottom: 8, marginTop: 4 },
   input: {
-    backgroundColor: '#f9fafb',
-    borderWidth: 1,
-    borderColor: '#e5e7eb',
-    borderRadius: 8,
-    padding: 12,
-    fontSize: 15,
-    color: '#111827',
-    marginBottom: 16,
+    borderWidth: 1, borderRadius: 10, paddingHorizontal: 14,
+    paddingVertical: 12, fontSize: 15, marginBottom: 16
   },
   button: {
-    backgroundColor: '#3b82f6',
-    borderRadius: 8,
-    padding: 14,
-    alignItems: 'center',
-    marginTop: 8,
+    backgroundColor: '#2563eb', borderRadius: 10, paddingVertical: 14,
+    alignItems: 'center', marginTop: 4, shadowColor: '#3b82f6',
+    shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 4,
   },
-  buttonDisabled: {
-    backgroundColor: '#93c5fd',
-  },
-  buttonText: {
-    color: '#ffffff',
-    fontSize: 16,
-    fontWeight: '600',
-  },
+  buttonDisabled: { opacity: 0.7 },
+  buttonText: { color: '#fff', fontSize: 16, fontWeight: '700', letterSpacing: 0.3 },
 })
