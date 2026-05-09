@@ -1,15 +1,22 @@
 import React, { useEffect, useState, useRef } from 'react'
 import {
   ActivityIndicator, View, Text, StyleSheet,
-  TouchableOpacity, Animated, Pressable, useColorScheme
+  TouchableOpacity, Animated, Pressable, useColorScheme,
+  BackHandler
 } from 'react-native'
 import AsyncStorage from '@react-native-async-storage/async-storage'
-import { NavigationContainer, DarkTheme, DefaultTheme } from '@react-navigation/native'
+import {
+  NavigationContainer, DarkTheme, DefaultTheme,
+  useNavigationContainerRef
+} from '@react-navigation/native'
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs'
 import { Ionicons } from '@expo/vector-icons'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
 import api from '../lib/api'
 import LoginScreen from '../screens/LoginScreen'
+import RegisterScreen from '../screens/RegisterScreen'
+import ForgotPasswordScreen from '../screens/ForgotPasswordScreen'
 import DashboardScreen from '../screens/DashboardScreen'
 import TransactionsScreen from '../screens/TransactionsScreen'
 import AccountsScreen from '../screens/AccountsScreen'
@@ -47,21 +54,28 @@ const NAVIGABLE = [
 ]
 
 function SideMenu({ visible, onClose, onNavigate, dark, isAdmin }: {
-  visible: boolean; onClose: () => void; onNavigate: (key: string) => void
-  dark: boolean; isAdmin: boolean
+  visible: boolean
+  onClose: () => void
+  onNavigate: (key: string) => void
+  dark: boolean
+  isAdmin: boolean
 }) {
-  const slideAnim = useRef(new Animated.Value(-320)).current
+  // ✅ Começa em +320 (fora da tela para a direita)
+  const slideAnim = useRef(new Animated.Value(320)).current
   const fadeAnim  = useRef(new Animated.Value(0)).current
+  const insets = useSafeAreaInsets()
 
   useEffect(() => {
     if (visible) {
       Animated.parallel([
+        // ✅ Desliza da direita para o centro (320 → 0)
         Animated.spring(slideAnim, { toValue: 0, useNativeDriver: true, tension: 65, friction: 11 }),
         Animated.timing(fadeAnim, { toValue: 1, duration: 200, useNativeDriver: true }),
       ]).start()
     } else {
       Animated.parallel([
-        Animated.timing(slideAnim, { toValue: -320, duration: 220, useNativeDriver: true }),
+        // ✅ Volta para a direita (0 → 320)
+        Animated.timing(slideAnim, { toValue: 320, duration: 220, useNativeDriver: true }),
         Animated.timing(fadeAnim, { toValue: 0, duration: 180, useNativeDriver: true }),
       ]).start()
     }
@@ -85,17 +99,22 @@ function SideMenu({ visible, onClose, onNavigate, dark, isAdmin }: {
       <Animated.View style={[styles.overlay, { opacity: fadeAnim }]}>
         <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
       </Animated.View>
-      <Animated.View style={[styles.sidePanel, { backgroundColor: c.bg, transform: [{ translateX: slideAnim }] }]}>
-        <View style={[styles.menuHeader, { backgroundColor: c.header }]}>
-          <View style={styles.menuLogoRow}>
-            <View style={styles.menuLogoWrap}>
-              <OrenLogo size={22} color="#ffffff" />
-            </View>
-            <Text style={styles.menuAppName}>Oren Finance</Text>
-          </View>
+
+      {/* ✅ Painel ancorado à direita com sombra para a esquerda */}
+      <Animated.View style={[
+        styles.sidePanel,
+        { backgroundColor: c.bg, transform: [{ translateX: slideAnim }] }
+      ]}>
+        <View style={[styles.menuHeader, { backgroundColor: c.header, paddingTop: insets.top + 20 }]}>
           <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
             <Ionicons name="close" size={20} color="rgba(255,255,255,0.8)" />
           </TouchableOpacity>
+          <View style={styles.menuLogoRow}>
+            <Text style={styles.menuAppName}>Oren Finance</Text>
+            <View style={styles.menuLogoWrap}>
+              <OrenLogo size={22} color="#ffffff" />
+            </View>
+          </View>
         </View>
 
         <View style={styles.menuItems}>
@@ -128,9 +147,152 @@ function SideMenu({ visible, onClose, onNavigate, dark, isAdmin }: {
   )
 }
 
+function EmptyScreen() {
+  return <View style={{ flex: 1 }} />
+}
+
+function AppContent({
+  onLogout, onImpersonate, onMenuOpen, isAdmin, dark, menuVisible, setMenuVisible, navigationRef
+}: {
+  onLogout: () => void
+  onImpersonate: (email: string) => void
+  onMenuOpen: () => void
+  isAdmin: boolean
+  dark: boolean
+  menuVisible: boolean
+  setMenuVisible: (v: boolean) => void
+  navigationRef: any
+}) {
+  const insets = useSafeAreaInsets()
+  const tabBarHeight = 58 + insets.bottom
+
+  const tabBarStyle = {
+    backgroundColor: dark ? '#1e293b' : '#ffffff',
+    borderTopColor:  dark ? '#334155' : '#f1f5f9',
+    borderTopWidth: 1,
+    paddingBottom: insets.bottom > 0 ? insets.bottom : 10,
+    paddingTop: 8,
+    height: tabBarHeight,
+  }
+
+  useEffect(() => {
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      if (menuVisible) {
+        setMenuVisible(false)
+        return true
+      }
+      try {
+        const nav = navigationRef.current
+        if (nav?.canGoBack()) {
+          nav.goBack()
+        } else {
+          nav?.navigate('Dashboard' as never)
+        }
+      } catch {
+        navigationRef.current?.navigate('Dashboard' as never)
+      }
+      return true
+    })
+    return () => sub.remove()
+  }, [menuVisible])
+
+  // ✅ Cor inativa igual às outras abas — sem azul fixo
+  const inactiveColor = dark ? '#475569' : '#94a3b8'
+
+  return (
+    <Tab.Navigator
+      initialRouteName="Dashboard"
+      screenOptions={{
+        headerShown: false,
+        tabBarActiveTintColor:   '#3b82f6',
+        tabBarInactiveTintColor: inactiveColor,
+        tabBarStyle,
+        tabBarLabelStyle: { fontSize: 11, fontWeight: '600' },
+      }}
+    >
+      <Tab.Screen
+        name="Dashboard"
+        options={{
+          tabBarIcon: ({ focused, color, size }) => (
+            <Ionicons name={focused ? 'grid' : 'grid-outline'} size={size} color={color} />
+          ),
+        }}
+      >
+        {(props) => <DashboardScreen {...props} onLogout={onLogout} />}
+      </Tab.Screen>
+
+      <Tab.Screen
+        name="Transações"
+        component={TransactionsScreen}
+        options={{
+          tabBarIcon: ({ focused, color, size }) => (
+            <Ionicons name={focused ? 'swap-horizontal' : 'swap-horizontal-outline'} size={size} color={color} />
+          ),
+        }}
+      />
+
+      <Tab.Screen
+        name="Contas"
+        component={AccountsScreen}
+        options={{
+          tabBarIcon: ({ focused, color, size }) => (
+            <Ionicons name={focused ? 'wallet' : 'wallet-outline'} size={size} color={color} />
+          ),
+        }}
+      />
+
+      <Tab.Screen
+        name="Cartões"
+        component={CardsScreen}
+        options={{
+          tabBarIcon: ({ focused, color, size }) => (
+            <Ionicons name={focused ? 'card' : 'card-outline'} size={size} color={color} />
+          ),
+        }}
+      />
+
+      {/* ✅ Menu último = lado direito da tab bar, cor inativa correta */}
+      <Tab.Screen
+        name="Menu"
+        component={EmptyScreen}
+        options={{
+          tabBarButton: () => (
+            <TouchableOpacity
+              style={styles.menuTabButton}
+              onPress={onMenuOpen}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="menu" size={24} color={inactiveColor} />
+              <Text style={[styles.menuTabLabel, { color: inactiveColor }]}>Menu</Text>
+            </TouchableOpacity>
+          ),
+        }}
+      />
+
+      {/* Telas do menu lateral */}
+      <Tab.Screen name="Metas"          component={GoalsScreen}        options={{ tabBarButton: () => null, tabBarStyle }} />
+      <Tab.Screen name="Categorias"     component={CategoriesScreen}   options={{ tabBarButton: () => null, tabBarStyle }} />
+      <Tab.Screen name="Recorrentes"    component={RecurringScreen}    options={{ tabBarButton: () => null, tabBarStyle }} />
+      <Tab.Screen name="Relatórios"     component={ReportsScreen}      options={{ tabBarButton: () => null, tabBarStyle }} />
+      <Tab.Screen name="Transferências" component={TransfersScreen}    options={{ tabBarButton: () => null, tabBarStyle }} />
+      <Tab.Screen name="Calendário"     component={CalendarScreen}     options={{ tabBarButton: () => null, tabBarStyle }} />
+      <Tab.Screen name="Importar"       component={ImportScreen}       options={{ tabBarButton: () => null, tabBarStyle }} />
+      <Tab.Screen name="Calculadora"    component={CalculatorScreen}   options={{ tabBarButton: () => null, tabBarStyle }} />
+      <Tab.Screen name="Configurações"  component={SettingsScreen}     options={{ tabBarButton: () => null, tabBarStyle }} />
+      <Tab.Screen
+        name="Admin"
+        options={{ tabBarButton: () => null, tabBarStyle }}
+      >
+        {(props) => <AdminScreen {...props} onImpersonate={onImpersonate} />}
+      </Tab.Screen>
+    </Tab.Navigator>
+  )
+}
+
 export default function AppNavigator() {
   const [loading, setLoading]                   = useState(true)
   const [loggedIn, setLoggedIn]                 = useState(false)
+  const [authScreen, setAuthScreen]             = useState<'login' | 'register' | 'forgot'>('login')
   const [menuVisible, setMenuVisible]           = useState(false)
   const [isAdmin, setIsAdmin]                   = useState(false)
   const [impersonating, setImpersonating]       = useState(false)
@@ -138,9 +300,10 @@ export default function AppNavigator() {
 
   const scheme = useColorScheme()
   const dark = scheme === 'dark'
-  const navigationRef = useRef<any>(null)
+  const navigationRef = useNavigationContainerRef()
+  const navRef = useRef(navigationRef)
+  const insets = useSafeAreaInsets()
 
-  // Carrega token e impersonation iniciais
   useEffect(() => {
     AsyncStorage.multiGet(['token', 'impersonate_id', 'impersonate_email']).then(pairs => {
       const token         = pairs[0][1]
@@ -153,7 +316,6 @@ export default function AppNavigator() {
     })
   }, [])
 
-  // Verifica admin sempre que logar
   useEffect(() => {
     if (!loggedIn) { setIsAdmin(false); return }
     api.get('/api/admin/check')
@@ -161,36 +323,27 @@ export default function AppNavigator() {
       .catch(() => setIsAdmin(false))
   }, [loggedIn])
 
-  const handleLogin = () => setLoggedIn(true)
-
-  const handleLogout = () => {
-    setLoggedIn(false)
-    setIsAdmin(false)
-  }
+  const handleLogin  = () => { setAuthScreen('login'); setLoggedIn(true) }
+  const handleLogout = () => { setLoggedIn(false); setAuthScreen('login'); setIsAdmin(false) }
 
   const handleImpersonate = (email: string) => {
     setImpersonating(true)
     setImpersonateEmail(email)
     setMenuVisible(false)
-    setTimeout(() => navigationRef.current?.navigate('Dashboard'), 100)
+    setTimeout(() => navigationRef.navigate('Dashboard' as never), 100)
   }
 
   const handleStopImpersonate = async () => {
     await AsyncStorage.multiRemove(['impersonate_id', 'impersonate_email'])
     setImpersonating(false)
     setImpersonateEmail('')
-    navigationRef.current?.navigate('Dashboard')
+    navigationRef.navigate('Dashboard' as never)
   }
 
   const handleMenuNavigate = (key: string) => {
     setMenuVisible(false)
     setTimeout(() => {
-      if (NAVIGABLE.includes(key)) {
-        navigationRef.current?.navigate(key)
-      } else {
-        const label = MENU_ITEMS.find(m => m.key === key)?.label
-        alert(`Tela "${label}" em breve!`)
-      }
+      if (NAVIGABLE.includes(key)) navigationRef.navigate(key as never)
     }, 300)
   }
 
@@ -203,23 +356,23 @@ export default function AppNavigator() {
   }
 
   if (!loggedIn) {
-    return <LoginScreen onLogin={handleLogin} />
-  }
-
-  const tabBarStyle = {
-    backgroundColor: dark ? '#1e293b' : '#ffffff',
-    borderTopColor:  dark ? '#334155' : '#f1f5f9',
-    borderTopWidth: 1,
-    paddingBottom: 10,
-    paddingTop: 8,
-    height: 68,
+    if (authScreen === 'register')
+      return <RegisterScreen onBack={() => setAuthScreen('login')} onLogin={() => setAuthScreen('login')} />
+    if (authScreen === 'forgot')
+      return <ForgotPasswordScreen onBack={() => setAuthScreen('login')} />
+    return (
+      <LoginScreen
+        onLogin={handleLogin}
+        onRegister={() => setAuthScreen('register')}
+        onForgot={() => setAuthScreen('forgot')}
+      />
+    )
   }
 
   return (
     <View style={{ flex: 1 }}>
-      {/* Banner de impersonation */}
       {impersonating && (
-        <View style={styles.impersonateBanner}>
+        <View style={[styles.impersonateBanner, { paddingTop: insets.top + 10 }]}>
           <Ionicons name="warning-outline" size={15} color="#fff" style={{ marginRight: 6 }} />
           <Text style={styles.impersonateText} numberOfLines={1}>
             Navegando como <Text style={{ fontWeight: '700' }}>{impersonateEmail}</Text>
@@ -230,56 +383,21 @@ export default function AppNavigator() {
         </View>
       )}
 
-      <NavigationContainer ref={navigationRef} theme={dark ? DarkTheme : DefaultTheme}>
-        <Tab.Navigator
-          initialRouteName="Dashboard"
-          screenOptions={({ route }) => ({
-            headerShown: false,
-            tabBarIcon: ({ focused, color, size }) => {
-              const icons: Record<string, keyof typeof Ionicons.glyphMap> = {
-                'Menu':       'menu',
-                'Dashboard':  focused ? 'grid' : 'grid-outline',
-                'Transações': focused ? 'swap-horizontal' : 'swap-horizontal-outline',
-                'Contas':     focused ? 'wallet' : 'wallet-outline',
-                'Cartões':    focused ? 'card' : 'card-outline',
-              }
-              return <Ionicons name={icons[route.name] || 'ellipse-outline'} size={size} color={color} />
-            },
-            tabBarActiveTintColor:   '#3b82f6',
-            tabBarInactiveTintColor: dark ? '#475569' : '#94a3b8',
-            tabBarStyle,
-            tabBarLabelStyle: { fontSize: 11, fontWeight: '600' },
-          })}
-        >
-          <Tab.Screen
-            name="Menu"
-            component={View}
-            listeners={{ tabPress: e => { e.preventDefault(); setMenuVisible(true) } }}
-          />
-          <Tab.Screen name="Dashboard">
-            {(props) => <DashboardScreen {...props} onLogout={handleLogout} />}
-          </Tab.Screen>
-          <Tab.Screen name="Transações"    component={TransactionsScreen} />
-          <Tab.Screen name="Contas"        component={AccountsScreen} />
-          <Tab.Screen name="Cartões"       component={CardsScreen} />
-
-          {/* Abas ocultas */}
-          <Tab.Screen name="Metas"          component={GoalsScreen}        options={{ tabBarButton: () => null, tabBarStyle }} />
-          <Tab.Screen name="Categorias"     component={CategoriesScreen}   options={{ tabBarButton: () => null, tabBarStyle }} />
-          <Tab.Screen name="Recorrentes"    component={RecurringScreen}    options={{ tabBarButton: () => null, tabBarStyle }} />
-          <Tab.Screen name="Relatórios"     component={ReportsScreen}      options={{ tabBarButton: () => null, tabBarStyle }} />
-          <Tab.Screen name="Transferências" component={TransfersScreen}    options={{ tabBarButton: () => null, tabBarStyle }} />
-          <Tab.Screen name="Calendário"     component={CalendarScreen}     options={{ tabBarButton: () => null, tabBarStyle }} />
-          <Tab.Screen name="Importar"       component={ImportScreen}       options={{ tabBarButton: () => null, tabBarStyle }} />
-          <Tab.Screen name="Calculadora"    component={CalculatorScreen}   options={{ tabBarButton: () => null, tabBarStyle }} />
-          <Tab.Screen name="Configurações"  component={SettingsScreen}     options={{ tabBarButton: () => null, tabBarStyle }} />
-          <Tab.Screen
-            name="Admin"
-            options={{ tabBarButton: () => null, tabBarStyle }}
-          >
-            {(props) => <AdminScreen {...props} onImpersonate={handleImpersonate} />}
-          </Tab.Screen>
-        </Tab.Navigator>
+      <NavigationContainer
+        ref={navigationRef}
+        theme={dark ? DarkTheme : DefaultTheme}
+        onReady={() => { navRef.current = navigationRef }}
+      >
+        <AppContent
+          onLogout={handleLogout}
+          onImpersonate={handleImpersonate}
+          onMenuOpen={() => setMenuVisible(true)}
+          isAdmin={isAdmin}
+          dark={dark}
+          menuVisible={menuVisible}
+          setMenuVisible={setMenuVisible}
+          navigationRef={navRef}
+        />
       </NavigationContainer>
 
       <SideMenu
@@ -295,14 +413,28 @@ export default function AppNavigator() {
 
 const styles = StyleSheet.create({
   overlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.5)' },
+
+  // ✅ Ancorado à DIREITA, sombra para a esquerda
   sidePanel: {
-    position: 'absolute', left: 0, top: 0, bottom: 0, width: 280,
-    shadowColor: '#000', shadowOffset: { width: 4, height: 0 },
-    shadowOpacity: 0.2, shadowRadius: 12, elevation: 16,
+    position: 'absolute',
+    right: 0,          // ← era left: 0
+    top: 0,
+    bottom: 0,
+    width: 280,
+    shadowColor: '#000',
+    shadowOffset: { width: -4, height: 0 },  // ← sombra para a esquerda
+    shadowOpacity: 0.2,
+    shadowRadius: 12,
+    elevation: 16,
   },
+
   menuHeader: {
-    paddingTop: 60, paddingBottom: 20, paddingHorizontal: 20,
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingBottom: 20,
+    paddingHorizontal: 20,
+    flexDirection: 'row',
+    alignItems: 'center',
+    // ✅ Botão fechar à esquerda, logo+nome à direita (espelhado)
+    justifyContent: 'space-between',
   },
   menuLogoRow:  { flexDirection: 'row', alignItems: 'center', gap: 10 },
   menuLogoWrap: {
@@ -319,12 +451,23 @@ const styles = StyleSheet.create({
   menuIconWrap: { width: 34, height: 34, borderRadius: 8, justifyContent: 'center', alignItems: 'center' },
   menuItemText: { flex: 1, fontSize: 15, fontWeight: '500' },
 
-  // Banner impersonation
+  menuTabButton: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingTop: 8,
+    paddingBottom: 4,
+  },
+  menuTabLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    marginTop: 2,
+  },
+
   impersonateBanner: {
     flexDirection: 'row', alignItems: 'center',
     backgroundColor: '#d97706',
     paddingHorizontal: 14, paddingVertical: 10,
-    paddingTop: 50,
   },
   impersonateText:    { flex: 1, color: '#fff', fontSize: 13 },
   impersonateBtn:     { backgroundColor: 'rgba(0,0,0,0.25)', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, marginLeft: 8 },
